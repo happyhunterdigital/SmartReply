@@ -5,7 +5,7 @@
 Open-sourced ManyChat for Instagram comment-to-DM automation.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/diwenne/smartreply?style=flat&color=black)](https://github.com/diwenne/smartreply/stargazers)
+[![Stars](https://img.shields.io/github/stars/happyhunterdigital/SmartReply?style=flat&color=black)](https://github.com/happyhunterdigital/SmartReply/stargazers)
 [![Built with Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
 
 </div>
@@ -56,12 +56,12 @@ The honest version: the code deploys in minutes, but the Meta app setup is the p
 
 ### Deploy the web app
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/diwenne/smartreply)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/happyhunterdigital/SmartReply)
 
 ### Run it locally
 
 ```bash
-git clone https://github.com/diwenne/smartreply.git
+git clone https://github.com/happyhunterdigital/SmartReply.git
 cd smartreply
 npm install
 cp .env.example .env      # then fill in the values, see docs/setup.md
