@@ -52,7 +52,7 @@ export default function Sidebar({
       >
         <div className="px-6 py-5 border-b border-border">
           <Link href="/dashboard" className="text-base font-semibold">
-            OpenReply
+            SmartReply
           </Link>
         </div>
 

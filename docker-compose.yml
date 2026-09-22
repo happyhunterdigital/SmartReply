@@ -1,11 +1,11 @@
-# OpenReply — Local Development Services
+# SmartReply — Local Development Services
 # Run: docker-compose up -d
 
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: openreply
+      POSTGRES_DB: smartreply
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:

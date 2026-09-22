@@ -1,6 +1,6 @@
 # Stack
 
-Everything OpenReply needs to run, in one place: the application libraries, the
+Everything SmartReply needs to run, in one place: the application libraries, the
 runtime processes, and the specific (free) services this instance is deployed on.
 For the step-by-step setup, see [setup.md](setup.md).
 

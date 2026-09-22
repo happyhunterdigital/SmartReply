@@ -226,6 +226,32 @@ export const CAMPAIGN_TEMPLATES: CampaignTemplate[] = [
     metrics: ["Brand inquiries", "Media kit clicks", "Qualified partnership DMs"],
     accent: "cyan",
   },
+  {
+    slug: "happy-hunter-audit",
+    title: "Happy Hunter Audit Drop",
+    category: "Lead generation",
+    audience: "Happy Hunter Digital Instagram",
+    summary:
+      "Turn AUDIT, LINK, or SCORE comments on any post into a private reply with the free AI visibility audit.",
+    goal: "Audit link delivery",
+    keywords: ["AUDIT", "LINK", "SCORE"],
+    dmMessage:
+      "Hey {username}, here is your free AI visibility audit: https://www.happyhunterdigital.com/audit",
+    triggerExample: "AUDIT",
+    privateReplyPreview:
+      "Hey Maya, here is your free audit: happyhunterdigital.com/audit",
+    setupMinutes: 3,
+    outcome: "Convert content-engine carousel reach into DM-delivered audit clicks.",
+    bestFor: ["GEO carousels", "Audit reels", "Lead magnet posts"],
+    playbook: [
+      "Set matchAnyPost true so every content-engine post is covered.",
+      "Use AUDIT as primary keyword in captions, LINK and SCORE as fallbacks.",
+      "Send https://www.happyhunterdigital.com/audit as tracked link.",
+      "Check DmLog SENT vs SKIPPED_DEDUP after each drop.",
+    ],
+    metrics: ["Sent replies", "Audit link CTR", "Replies by post"],
+    accent: "amber",
+  },
 ];
 
 export function getCampaignTemplate(slug: string | null | undefined) {
