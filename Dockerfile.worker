@@ -1,0 +1,23 @@
+# SmartReply worker — Cloud Run (replaces Railway worker).
+# Long-lived BullMQ consumer: sends DMs, polling reconciler, follow-gate checks.
+# Deploy: gcloud run deploy smartreply-worker --source . --no-allow-unauthenticated
+#   --min-instances 1 --cpu 1 --memory 1Gi --cpu-boost
+#   --set-env-vars REDIS_URL=...,DATABASE_URL=... (or mount secrets)
+#   --set-secrets ENCRYPTION_KEY=smartreply-encryption-key:latest,...
+# Cloud Run must keep CPU always allocated (min-instances 1) or the queue stalls.
+FROM node:22-slim AS base
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev=false
+
+COPY prisma ./prisma
+COPY tsconfig.json ./
+COPY worker ./worker
+COPY lib ./lib
+COPY types ./types
+
+RUN npm run db:generate
+
+# No HTTP server here: the worker consumes Redis + Postgres and exits nonzero on crash (restart policy handles it).
+CMD ["npm", "run", "worker"]

@@ -1,0 +1,29 @@
+# Firebase App Hosting — SmartReply web (replaces Vercel).
+# Backend root: this repo. Build: next build (see package.json build script).
+# Secrets: set via `firebase apphosting:secrets:set NAME` (never commit values).
+# Plain env below; secrets referenced from Secret Manager.
+runConfig:
+  runtime: nodejs22
+  # Keep one warm instance so the Meta webhook answers fast.
+  minInstances: 1
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 1024
+
+env:
+  # Public URL of THIS backend. Set to the real App Hosting domain after
+  # first deploy (or your custom domain, e.g. https://smartreply.happyhunterdigital.com).
+  - variable: NEXTAUTH_URL
+    value: https://YOUR-BACKEND-DOMAIN
+  - variable: META_GRAPH_API_VERSION
+    value: v25.0
+  - variable: EMAIL_FROM
+    value: SmartReply <motsumitl@happyhunterdigital.com>
+
+# Secrets (create with `firebase apphosting:secrets:set NAME`):
+#   NEXTAUTH_SECRET, CRON_SECRET, ENCRYPTION_KEY (64 hex, identical on worker),
+#   DATABASE_URL, REDIS_URL,
+#   RESEND_API_KEY,
+#   INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, FACEBOOK_APP_SECRET,
+#   WEBHOOK_VERIFY_TOKEN
