@@ -76,21 +76,30 @@ DATABASE_URL="postgresql://..." npm run db:migrate
 
 ### Step 4: Cloud Run (worker)
 
-Deploy the always-on worker from `Dockerfile.worker`:
+The worker has no public API, so `worker/dm-worker.ts` exposes a small `/healthz`
+endpoint on `$PORT` (8080) for Cloud Run's health check. Build it with the
+repository's `Dockerfile.worker` (not the default `Dockerfile` name) and deploy
+the resulting image:
 
 ```bash
+gcloud builds submit --config cloudbuild.worker.yaml .
+
 gcloud run deploy smartreply-worker \
-  --source . \
+  --image gcr.io/<PROJECT_ID>/smartreply-worker \
+  --region <REGION> \
   --no-allow-unauthenticated \
   --min-instances 1 \
+  --no-cpu-throttling \
   --cpu 1 \
   --memory 1Gi \
-  --cpu-boost \
-  --set-env-vars REDIS_URL=...,DATABASE_URL=...,NEXTAUTH_URL=https://<domain> \
+  --set-env-vars REDIS_URL=...,DATABASE_URL=...,NEXTAUTH_URL=https://smartreply.happyhunterdigital.com \
   --set-secrets ENCRYPTION_KEY=smartreply-encryption-key:latest
 ```
 
-Keep `--min-instances 1` and `--cpu-boost` (CPU always allocated) or the BullMQ consumer stalls and no DM sends. The worker needs the same `DATABASE_URL`, `REDIS_URL`, and `ENCRYPTION_KEY` as the web app.
+`--no-cpu-throttling` keeps CPU allocated outside requests; without it the queue
+consumer stalls and no DM sends. `--min-instances 1` keeps the instance running
+permanently. The worker needs the same `DATABASE_URL`, `REDIS_URL`, and
+`ENCRYPTION_KEY` as the web app.
 
 ### Step 5: Scheduled jobs (crons)
 

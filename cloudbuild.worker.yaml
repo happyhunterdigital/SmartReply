@@ -1,0 +1,20 @@
+# Builds the SmartReply DM worker image from Dockerfile.worker (not the default
+# Dockerfile name, so the normal `gcloud run deploy --source` auto-detection
+# would miss it).
+#
+# Usage:
+#   gcloud builds submit --config cloudbuild.worker.yaml .
+#
+# Then deploy the image:
+#   gcloud run deploy smartreply-worker --image gcr.io/<PROJECT_ID>/smartreply-worker ...
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/smartreply-worker'
+      - '-f'
+      - 'Dockerfile.worker'
+      - '.'
+images:
+  - 'gcr.io/$PROJECT_ID/smartreply-worker'
