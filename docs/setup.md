@@ -26,7 +26,7 @@ The web app and the worker must share the same `DATABASE_URL`, the same `REDIS_U
 
 ## Hosting and your domain
 
-You do not need to buy a domain. Firebase App Hosting gives you a free public URL, and that URL is what everything else points at: `NEXTAUTH_URL`, the Meta OAuth redirect, and the Meta webhook callback all use it. A custom domain (for example `https://smartreply.happyhunterdigital.com`) is optional.
+This fork is configured for `https://smartreply.happyhunterdigital.com` (set as `NEXTAUTH_URL` in `apphosting.yaml`), and everything else points at it: the Meta OAuth redirect and the Meta webhook callback must use this same domain. On first deploy, Firebase App Hosting also assigns its own default URL; you can use that instead, but then update all three values (`NEXTAUTH_URL`, the Meta OAuth redirect, and the Meta webhook callback) to match.
 
 Recommended split:
 
@@ -199,7 +199,7 @@ Until you accept here, the account is not really a tester and the login will kee
 In the Instagram product, open Set up Instagram business login, then Business login settings. In the OAuth redirect URIs field, add exactly, using your domain:
 
 ```
-https://<your-domain>/api/instagram/callback
+https://smartreply.happyhunterdigital.com/api/instagram/callback
 ```
 
 No trailing slash. If this is missing or wrong, connecting an account fails with a redirect_uri mismatch. You can register more than one, which is useful if you change domains later; keep the old and new both listed.
@@ -210,7 +210,7 @@ You do not need the "Embed URL" that Meta shows here. SmartReply builds its own 
 
 Still in the Instagram product, find the Configure webhooks step.
 
-- Callback URL: `https://<your-domain>/api/webhook`
+- Callback URL: `https://smartreply.happyhunterdigital.com/api/webhook`
 - Verify token: the value of `WEBHOOK_VERIFY_TOKEN` from your environment
 - Click Verify and save. It should succeed immediately, because the app answers Meta's verification challenge. If the button is greyed out, click into the verify-token field and paste the token again; editing the callback URL often clears it.
 - Subscribe to the `comments` field.
@@ -226,9 +226,9 @@ Real comment webhooks are only delivered when the app is in Live state. In Devel
 Go to the Publish item in the left sidebar. Set the privacy policy, terms of service, and data deletion URLs first, or it will not let you publish. SmartReply ships these pages, on your domain:
 
 ```
-https://<your-domain>/privacy
-https://<your-domain>/data-deletion
-https://<your-domain>/terms
+https://smartreply.happyhunterdigital.com/privacy
+https://smartreply.happyhunterdigital.com/data-deletion
+https://smartreply.happyhunterdigital.com/terms
 ```
 
 Then publish. Depending on your access level, Meta may let you go live for your own tester accounts immediately, or it may require App Review first (see the last section).

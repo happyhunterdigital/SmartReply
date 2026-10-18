@@ -15,7 +15,7 @@ env:
   # Public URL of THIS backend. Set to the real App Hosting domain after
   # first deploy (or your custom domain, e.g. https://smartreply.happyhunterdigital.com).
   - variable: NEXTAUTH_URL
-    value: https://YOUR-BACKEND-DOMAIN
+    value: https://smartreply.happyhunterdigital.com
   - variable: META_GRAPH_API_VERSION
     value: v25.0
   - variable: EMAIL_FROM
