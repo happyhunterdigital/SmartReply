@@ -1,9 +1,10 @@
-# Firebase App Hosting — SmartReply web (replaces Vercel).
-# Backend root: this repo. Build: next build (see package.json build script).
-# Secrets: set via `firebase apphosting:secrets:set NAME` (never commit values).
-# Plain env below; secrets referenced from Secret Manager.
+# Firebase App Hosting backend - SmartReply web app.
+# Build: npm run build (prisma generate && next build).
+#
+# Secrets live in Cloud Secret Manager. Create each one with
+#   firebase apphosting:secrets:set NAME
+# then reference it below with `secret: NAME`. Values are never committed.
 runConfig:
-  runtime: nodejs22
   # Keep one warm instance so the Meta webhook answers fast.
   minInstances: 1
   maxInstances: 2
@@ -12,18 +13,32 @@ runConfig:
   memoryMiB: 1024
 
 env:
-  # Public URL of THIS backend. Set to the real App Hosting domain after
-  # first deploy (or your custom domain, e.g. https://smartreply.happyhunterdigital.com).
+  # Public, non-secret values.
   - variable: NEXTAUTH_URL
     value: https://smartreply.happyhunterdigital.com
   - variable: META_GRAPH_API_VERSION
     value: v25.0
   - variable: EMAIL_FROM
-    value: SmartReply <motsumitl@happyhunterdigital.com>
+    value: "SmartReply <motsumitl@happyhunterdigital.com>"
 
-# Secrets (create with `firebase apphosting:secrets:set NAME`):
-#   NEXTAUTH_SECRET, CRON_SECRET, ENCRYPTION_KEY (64 hex, identical on worker),
-#   DATABASE_URL, REDIS_URL,
-#   RESEND_API_KEY,
-#   INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, FACEBOOK_APP_SECRET,
-#   WEBHOOK_VERIFY_TOKEN
+  # Secrets. Must be referenced here or App Hosting will not inject them.
+  - variable: NEXTAUTH_SECRET
+    secret: NEXTAUTH_SECRET
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+  - variable: ENCRYPTION_KEY
+    secret: ENCRYPTION_KEY
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+  - variable: REDIS_URL
+    secret: REDIS_URL
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+  - variable: INSTAGRAM_APP_ID
+    secret: INSTAGRAM_APP_ID
+  - variable: INSTAGRAM_APP_SECRET
+    secret: INSTAGRAM_APP_SECRET
+  - variable: FACEBOOK_APP_SECRET
+    secret: FACEBOOK_APP_SECRET
+  - variable: WEBHOOK_VERIFY_TOKEN
+    secret: WEBHOOK_VERIFY_TOKEN
