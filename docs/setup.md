@@ -8,8 +8,8 @@ If you would rather have an AI assistant drive most of this, skip to [Set it up 
 
 SmartReply is two processes and two datastores.
 
-- Web app and API: Next.js. Serves the dashboard, the OAuth callback, and the incoming webhook. Runs well on Vercel.
-- Worker: a long-running Node process (`npm run worker`) that consumes the send queue and runs the polling reconciler. It cannot run on Vercel, because serverless functions are short-lived and a queue consumer has to stay up. Railway, Render, Fly, or any always-on box works.
+- Web app and API: Next.js. Serves the dashboard, the OAuth callback, and the incoming webhook. Runs on Firebase App Hosting (see `apphosting.yaml`).
+- Worker: a long-running Node process (`npm run worker`) that consumes the send queue and runs the polling reconciler. It has to stay always-on with CPU allocated, so it runs on Cloud Run (see `Dockerfile.worker`), not on a serverless web host.
 - PostgreSQL: campaigns, logs, accounts, sessions.
 - Redis: the BullMQ send queue and the per-account rate limiter.
 
@@ -20,82 +20,120 @@ The web app and the worker must share the same `DATABASE_URL`, the same `REDIS_U
 - A Facebook account. Meta developer registration is built on it. There is no Instagram-only path.
 - An Instagram Business or Creator account. A personal account cannot be connected. Switch it in the Instagram app under Settings, Account type, if needed.
 - A [Resend](https://resend.com) account for login emails, with a verified sender domain. Login is email magic links only, so without this nobody can sign in.
-- Somewhere to host. The recommended setup, used throughout this guide, is Vercel for the web app and Railway for the worker plus Postgres and Redis. Both have free tiers that are enough to run this for a single account.
+- A Google Cloud project with the Firebase App Hosting and Cloud Run APIs enabled, to host the web app and the worker.
+- A managed PostgreSQL and a managed Redis (any provider; see Step 1).
+- The Firebase CLI and the `gcloud` CLI installed locally.
 
 ## Hosting and your domain
 
-You do not need to buy a domain. Deploying the web app to Vercel gives you a free public URL like `your-app.vercel.app`, and that URL is what everything else points at: `NEXTAUTH_URL`, the Meta OAuth redirect, and the Meta webhook callback all use it. If you want a custom domain later you can add one, but it is optional and you can launch without it.
+You do not need to buy a domain. Firebase App Hosting gives you a free public URL, and that URL is what everything else points at: `NEXTAUTH_URL`, the Meta OAuth redirect, and the Meta webhook callback all use it. A custom domain (for example `https://smartreply.happyhunterdigital.com`) is optional.
 
 Recommended split:
 
-- Web app: Vercel. You get `your-app.vercel.app` for free on deploy.
-- Worker, Postgres, Redis: Railway.
+- Web app: Firebase App Hosting.
+- Worker: Cloud Run.
+- PostgreSQL + Redis: any managed provider. `docker-compose.yml` runs both locally for development.
 
-Do Railway first, because Vercel needs the database URLs from it.
+Do the datastores first, because both processes need their connection URLs.
 
-### Step 1: Railway (Postgres, Redis, worker)
+### Step 1: PostgreSQL and Redis
 
-1. Create a Railway account and a New Project.
-2. In the project, click New, then Database, then Add PostgreSQL.
-3. Click New, then Database, then Add Redis.
-4. Add the worker: click New, then GitHub Repo, and select your fork of this repo. Railway detects the Node app.
-5. Open the worker service's Settings and set the Build Command and Start Command:
-   ```
-   Build Command:  npm run db:generate
-   Start Command:  npm run worker
-   ```
-   The worker only needs the generated Prisma client, not `next build`. Do not leave the build as the default `npm run build`: it runs `next build` needlessly, and any build step that reaches the database (like `prisma migrate deploy`) fails here, because the worker cannot connect to Postgres at build time. Migrations are applied by the web app's `vercel-build` (Step 3) and by the manual `db:migrate` below, never by the worker.
-6. Open the worker service's Variables and add all the environment variables from the [table below](#environment-variables). For the worker, use Railway's internal database and Redis hostnames (they look like `postgres.railway.internal` and `redis.railway.internal`); inside Railway's network they are faster and free of egress. `NEXTAUTH_URL` is your Vercel domain. `ENCRYPTION_KEY` must be the exact same value you will use on Vercel.
+Create a managed Postgres and a managed Redis, and note one connection string for each. Both processes use the same URLs, so there is no internal/public split to worry about as long as the datastore is reachable from Google Cloud (or you allow the public endpoint).
 
-Getting the connection URLs. Open the Postgres service, then its Variables or Connect tab. You will see two URLs:
-
-| Variable | Host | Use it for |
-| --- | --- | --- |
-| `DATABASE_URL` | `postgres.railway.internal` | the Railway worker only |
-| `DATABASE_PUBLIC_URL` | `*.proxy.rlwy.net` | Vercel, and running migrations from your machine |
-
-Redis is the same: `REDIS_URL` (internal) for the worker, `REDIS_PUBLIC_URL` (public proxy) for Vercel.
-
-Vercel runs outside Railway's private network, so if you give Vercel an internal `*.railway.internal` URL it will hang and time out. Always give Vercel the public URLs.
+- Redis must speak the native Redis protocol over TCP. An HTTP-only Redis (some serverless Redis HTTP gateways) will not work with BullMQ.
 
 ### Step 2: Migrate the production database
 
-Run once from your machine, using the public Postgres URL:
+Run once from your machine, using the production Postgres URL:
 
 ```bash
-DATABASE_URL="postgresql://...proxy.rlwy.net.../railway" npm run db:migrate
+DATABASE_URL="postgresql://..." npm run db:migrate
 ```
 
-### Step 3: Vercel (web app, and your domain)
+### Step 3: Firebase App Hosting (web app, and your domain)
 
-1. Create a Vercel account and Add New Project, importing your fork. It auto-detects Next.js.
-2. Under the project's Settings, then Environment Variables, add every variable from the [table below](#environment-variables). Use these values:
-   - `NEXTAUTH_URL`: your Vercel domain, for example `https://your-app.vercel.app`. This is the free domain Vercel assigns on deploy.
-   - `DATABASE_URL` and `REDIS_URL`: the public Railway URLs (`DATABASE_PUBLIC_URL` and `REDIS_PUBLIC_URL` from Railway).
-   - `ENCRYPTION_KEY`: the exact same value as on the worker.
-3. Deploy. The build runs `prisma generate` before `next build`, so the Prisma client is generated even though it is gitignored.
-4. The daily token-refresh cron is wired up in `vercel.json`.
+1. Install and sign in to the Firebase CLI: `firebase login`.
+2. Review `apphosting.yaml` (already in the repo). It pins `runtime: nodejs22`, `minInstances: 1` (so the Meta webhook answers fast), and declares the non-secret env vars: `NEXTAUTH_URL`, `META_GRAPH_API_VERSION`, `EMAIL_FROM`.
+3. After the first deploy, set `NEXTAUTH_URL` in `apphosting.yaml` to your App Hosting domain (or custom domain).
+4. Create every secret with the Firebase CLI. They are stored in Secret Manager and injected as env vars at runtime, never committed:
 
-Note on crons: Vercel's free plan allows each cron to run at most once per day. The repo's crons are set to daily for that reason. The comment polling reconciler does not use a Vercel cron; it runs inside the Railway worker on its own interval, so the free plan is not a constraint there.
+   ```bash
+   firebase apphosting:secrets:set NEXTAUTH_SECRET
+   firebase apphosting:secrets:set CRON_SECRET
+   firebase apphosting:secrets:set ENCRYPTION_KEY
+   firebase apphosting:secrets:set DATABASE_URL
+   firebase apphosting:secrets:set REDIS_URL
+   firebase apphosting:secrets:set RESEND_API_KEY
+   firebase apphosting:secrets:set INSTAGRAM_APP_ID
+   firebase apphosting:secrets:set INSTAGRAM_APP_SECRET
+   firebase apphosting:secrets:set FACEBOOK_APP_SECRET
+   firebase apphosting:secrets:set WEBHOOK_VERIFY_TOKEN
+   ```
 
-Optional custom domain: if you want `smartreply.yoursite.com` instead of the Vercel URL, add it in Vercel under Domains and make it primary. Then update `NEXTAUTH_URL` and the two Meta URLs (Step 7 and Step 8 below) to the new domain, and update the worker's `NEXTAUTH_URL` too, or tracked links in DMs will point at the old domain.
+   `ENCRYPTION_KEY` must be exactly the same value you use on the worker.
+5. Deploy: `firebase deploy --only hosting`. The build runs `npm run build`, which is `prisma generate && next build`.
+6. `EMAIL_FROM` must be a sender on a domain you verified in Resend.
+
+### Step 4: Cloud Run (worker)
+
+Deploy the always-on worker from `Dockerfile.worker`:
+
+```bash
+gcloud run deploy smartreply-worker \
+  --source . \
+  --no-allow-unauthenticated \
+  --min-instances 1 \
+  --cpu 1 \
+  --memory 1Gi \
+  --cpu-boost \
+  --set-env-vars REDIS_URL=...,DATABASE_URL=...,NEXTAUTH_URL=https://<domain> \
+  --set-secrets ENCRYPTION_KEY=smartreply-encryption-key:latest
+```
+
+Keep `--min-instances 1` and `--cpu-boost` (CPU always allocated) or the BullMQ consumer stalls and no DM sends. The worker needs the same `DATABASE_URL`, `REDIS_URL`, and `ENCRYPTION_KEY` as the web app.
+
+### Step 5: Scheduled jobs (crons)
+
+Firebase App Hosting has no built-in cron. The app exposes three endpoints, each of which requires the header `Authorization: Bearer <CRON_SECRET>`:
+
+| Endpoint | Schedule | Purpose |
+| --- | --- | --- |
+| `/api/cron/refresh-tokens` | daily 05:00 UTC | Refresh Instagram long-lived tokens nearing expiry. Essential. |
+| `/api/cron/attach-next-reel` | daily 06:00 UTC | Attach the "next reel" automation target. |
+| `/api/cron/snapshot-followers` | daily 07:00 UTC | Snapshot follower counts for the history chart. |
+
+Drive them with Cloud Scheduler:
+
+```bash
+gcloud scheduler jobs create http refresh-tokens \
+  --schedule "0 5 * * *" \
+  --uri "https://<domain>/api/cron/refresh-tokens" \
+  --http-method GET \
+  --headers "Authorization=Bearer <CRON_SECRET>"
+```
+
+Repeat for the other two. The token-refresh job is the one that matters; if it never runs, Instagram connections eventually expire and sends start failing.
+
+### Alternative: Vercel + Railway
+
+The upstream setup (Vercel for the web app, Railway for the worker plus Postgres and Redis) still works, and `vercel.json` remains in the repo for it. Vercel runs the three crons natively, so that path has no Step 5. If you prefer it, use the Vercel/Railway steps from an earlier revision of this file; everything from [The Meta app](#the-meta-app) onward is identical either way.
 
 ## Environment variables
 
-Copy `.env.example` to `.env` for local work, or set these in Vercel and Railway for hosting.
+Copy `.env.example` to `.env` for local work. In production, non-secret values live in `apphosting.yaml`; secrets live in Secret Manager (App Hosting) and Cloud Run secrets.
 
 | Variable | What it is |
 | --- | --- |
-| `NEXTAUTH_URL` | Your public URL. Your Vercel domain in production, your tunnel URL locally. |
+| `NEXTAUTH_URL` | Your public URL. Your App Hosting domain in production, your tunnel URL locally. |
 | `NEXTAUTH_SECRET` | Random secret. `openssl rand -base64 32` |
-| `CRON_SECRET` | Random secret protecting the token-refresh cron. |
+| `CRON_SECRET` | Random secret protecting the cron endpoints. |
 | `ENCRYPTION_KEY` | 32-byte hex. `openssl rand -hex 32`. Encrypts Instagram tokens. Identical across web and worker. |
-| `DATABASE_URL` | PostgreSQL connection string. Public Railway URL on Vercel; internal on the worker. |
+| `DATABASE_URL` | PostgreSQL connection string. Same value on web and worker. |
 | `REDIS_URL` | Redis connection string. Must support blocking commands, so an HTTP-only Redis will not work with BullMQ. |
 | `RESEND_API_KEY` | Resend key. Login is email magic links only, so without this nobody can sign in. |
 | `EMAIL_FROM` | A sender on a domain you verified in Resend. The placeholder will not deliver. |
 | `META_GRAPH_API_VERSION` | Graph API version, for example `v25.0`. |
-| `INSTAGRAM_APP_ID` | From the Meta app, see Step 6. |
+| `INSTAGRAM_APP_ID` | From the Meta app, see Step 7. |
 | `INSTAGRAM_APP_SECRET` | From the Meta app. |
 | `FACEBOOK_APP_SECRET` | From the Meta app. |
 | `WEBHOOK_VERIFY_TOKEN` | Any random string. You paste the same value into Meta's webhook config. |
@@ -112,9 +150,9 @@ Optional, for tuning the polling reconciler (defaults are fine to start):
 
 ## The Meta app
 
-This is the slow part. The code works out of the box; getting Meta to send you comment events is where people lose an afternoon. Every step here exists because skipping it breaks something later. Have your Vercel domain from Step 3 ready, you will paste it in a few times.
+This is the slow part. The code works out of the box; getting Meta to send you comment events is where people lose an afternoon. Every step here exists because skipping it breaks something later. Have your domain from Step 3 ready, you will paste it in a few times.
 
-### Step 4: Create the Meta app
+### Step 6: Create the Meta app
 
 Go to [developers.facebook.com/apps](https://developers.facebook.com/apps) and create an app.
 
@@ -125,7 +163,7 @@ When it asks you to add a use case, filter to All, then choose Manage messaging 
 
 If you accidentally added the Marketing API use case, remove it. It has its own heavy review requirements and can block publishing.
 
-### Step 5: Collect the three secrets
+### Step 7: Collect the three secrets
 
 There are two app secrets and two app IDs, which is confusing. Here is what maps to what.
 
@@ -139,7 +177,7 @@ The Instagram app ID is not the same number as the Facebook App ID shown on the 
 
 SmartReply verifies webhook signatures against both `FACEBOOK_APP_SECRET` and `INSTAGRAM_APP_SECRET`, so you do not have to guess which one Meta signs with. Set both.
 
-### Step 6: Add your Instagram account as a tester, and accept the invite
+### Step 8: Add your Instagram account as a tester, and accept the invite
 
 This is the step people miss, and it produces the error "Insufficient Developer Role" on the Instagram login screen. In development, only accounts that have a role on your app can connect. Even your own account has to be added and accept.
 
@@ -156,23 +194,23 @@ Half two, on the Instagram side. This is the part that gets skipped. Open Instag
 
 Until you accept here, the account is not really a tester and the login will keep failing. If you do not see the invite, double-check you sent it to the exact username and that the account is a Business or Creator account.
 
-### Step 7: Register the OAuth redirect
+### Step 9: Register the OAuth redirect
 
-In the Instagram product, open Set up Instagram business login, then Business login settings. In the OAuth redirect URIs field, add exactly, using your Vercel domain:
+In the Instagram product, open Set up Instagram business login, then Business login settings. In the OAuth redirect URIs field, add exactly, using your domain:
 
 ```
-https://your-app.vercel.app/api/instagram/callback
+https://<your-domain>/api/instagram/callback
 ```
 
 No trailing slash. If this is missing or wrong, connecting an account fails with a redirect_uri mismatch. You can register more than one, which is useful if you change domains later; keep the old and new both listed.
 
 You do not need the "Embed URL" that Meta shows here. SmartReply builds its own login URL. Users connect by opening your app, going to Settings, and clicking Connect Instagram.
 
-### Step 8: Configure the webhook
+### Step 10: Configure the webhook
 
 Still in the Instagram product, find the Configure webhooks step.
 
-- Callback URL: `https://your-app.vercel.app/api/webhook`
+- Callback URL: `https://<your-domain>/api/webhook`
 - Verify token: the value of `WEBHOOK_VERIFY_TOKEN` from your environment
 - Click Verify and save. It should succeed immediately, because the app answers Meta's verification challenge. If the button is greyed out, click into the verify-token field and paste the token again; editing the callback URL often clears it.
 - Subscribe to the `comments` field.
@@ -181,16 +219,16 @@ To test delivery without a real comment, click Test next to `comments`, then cli
 
 If your primary domain ever changes, update this callback URL to the new domain. A non-primary domain will 307-redirect the POST, and Meta does not reliably follow redirects, so webhooks silently stop.
 
-### Step 9: Publish the app
+### Step 11: Publish the app
 
 Real comment webhooks are only delivered when the app is in Live state. In Development mode, only the console Test button delivers events. This is the single most common reason for "I set everything up and nothing happens."
 
-Go to the Publish item in the left sidebar. Set the privacy policy, terms of service, and data deletion URLs first, or it will not let you publish. SmartReply ships these pages, on your Vercel domain:
+Go to the Publish item in the left sidebar. Set the privacy policy, terms of service, and data deletion URLs first, or it will not let you publish. SmartReply ships these pages, on your domain:
 
 ```
-https://your-app.vercel.app/privacy
-https://your-app.vercel.app/data-deletion
-https://your-app.vercel.app/terms
+https://<your-domain>/privacy
+https://<your-domain>/data-deletion
+https://<your-domain>/terms
 ```
 
 Then publish. Depending on your access level, Meta may let you go live for your own tester accounts immediately, or it may require App Review first (see the last section).
@@ -203,7 +241,7 @@ Meta's `/me` returns two IDs. The `id` field is app-scoped. The `user_id` field 
 
 ## Test it end to end
 
-1. Make sure the account is a tester and has accepted the invite (Step 6), and the app is published (Step 9).
+1. Make sure the account is a tester and has accepted the invite (Step 8), and the app is published (Step 11).
 2. Connect it in the app: Settings, Connect Instagram. You should reach Instagram's consent screen, not the "Insufficient Developer Role" error.
 3. Create a campaign on one of your posts with a keyword like `TEST`.
 4. From a different Instagram account, comment `TEST` on that post. It must be a different account, because SmartReply ignores your own comments on purpose.
@@ -264,9 +302,10 @@ or host it for other people to sign up.>
 Work through this in order and stop to ask me whenever you need a value or an
 action only I can do:
 
-1. Local or hosted. Ask me which I want. If hosted, we use Vercel for the web
-   app (its domain becomes my public URL) and Railway for the worker plus
-   Postgres and Redis. If local, we use docker-compose and a tunnel.
+1. Local or hosted. Ask me which I want. If hosted, we use Firebase App Hosting
+   for the web app (its domain becomes my public URL) and Cloud Run for the
+   worker, plus a managed Postgres and Redis. If local, we use docker-compose
+   and a tunnel.
 
 2. Datastores. Help me get a Postgres and a Redis running, then run the Prisma
    migration against them.
@@ -276,14 +315,14 @@ action only I can do:
    sender address, and for the three Meta secrets once I create the app. Make
    sure ENCRYPTION_KEY is identical on the web app and the worker.
 
-4. Deploy both processes and confirm /api/health returns ok with the worker
-   healthy.
+4. Deploy both processes (App Hosting and Cloud Run), wire the three crons with
+   Cloud Scheduler, and confirm /api/health returns ok with the worker healthy.
 
 5. Meta app. Walk me through the Meta app section of docs/setup.md one step at a
    time. This is the slow part. Tell me exactly what to click and what to paste,
-   using my Vercel domain for the OAuth redirect and webhook. Remember the
-   account ID trap (store user_id, not id) and that the app must be published
-   for real webhooks to arrive.
+   using my domain for the OAuth redirect and webhook. Remember the account ID
+   trap (store user_id, not id) and that the app must be published for real
+   webhooks to arrive.
 
 6. Test. Have me create a campaign and comment a keyword from a second account,
    then confirm the DM sent by checking the DmLog table and the DM Logs page.
