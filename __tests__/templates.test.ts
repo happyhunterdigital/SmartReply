@@ -16,6 +16,7 @@ describe("campaign templates", () => {
       "restaurant-menu",
       "event-rsvp",
       "creator-media-kit",
+      "happy-hunter-audit",
     ]);
   });
 
