@@ -15,7 +15,7 @@ runConfig:
 env:
   # Public, non-secret values.
   - variable: NEXTAUTH_URL
-    value: https://smartreply.happyhunterdigital.com
+    value: https://smartreply--happy-hunter-systems.us-central1.hosted.app
   - variable: META_GRAPH_API_VERSION
     value: v25.0
   - variable: EMAIL_FROM
