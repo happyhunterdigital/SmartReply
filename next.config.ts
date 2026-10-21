@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Required for App Hosting: the adapter runs `node .next/standalone/server.js`.
+  output: "standalone",
   reactCompiler: true,
   turbopack: {
     root: process.cwd(),
